@@ -7,7 +7,7 @@
     "case_subfolder": "NomeDaSubpasta",
     "logfile": "nome_do_arquivo.log",
     "reports": [
-      "Report 1",
+      "Report 1 (como escrito no jobfile)",
       "Report 2",
       "Report Especial"
     ]
