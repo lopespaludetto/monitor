@@ -1,0 +1,15 @@
+{
+  "meu_caso_exemplo": {
+    "user": "seu_usuario_aqui",
+    "password": "sua_senha_aqui",
+    "base_dir": "/home/seu_usuario/caminho/para/simulacoes/",
+    "simulation_folder": "NomeDaPastaPrincipal",
+    "case_subfolder": "NomeDaSubpasta",
+    "logfile": "nome_do_arquivo.log",
+    "reports": [
+      "Report 1",
+      "Report 2",
+      "Report Especial"
+    ]
+  }
+}

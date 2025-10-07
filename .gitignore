@@ -1,0 +1,14 @@
+# Ignorar o arquivo de configuração com dados pessoais e sensíveis
+config.json
+
+# Ignorar arquivos de cache e compilados do Python
+__pycache__/
+*.pyc
+
+# Ignorar arquivos de saída gerados pelo script
+*.png
+*.log
+
+# Ignorar arquivos de ambiente virtual do Python (se usar)
+venv/
+*.venv
