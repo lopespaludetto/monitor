@@ -1,15 +1,28 @@
 {
   "meu_caso_exemplo": {
-    "user": "seu_usuario_aqui",
-    "password": "sua_senha_aqui",
+    "host": "ip_ou_nome_do_servidor",
+    "user": "seu_usuario_ssh",
+    "password": "sua_senha_ssh_ou_null",
     "base_dir": "/home/seu_usuario/caminho/para/simulacoes/",
     "simulation_folder": "NomeDaPastaPrincipal",
-    "case_subfolder": "NomeDaSubpasta",
+    "case_subfolder": "NomeDaSubpasta_ou_null",
     "logfile": "nome_do_arquivo.log",
     "reports": [
-      "Report 1 (como escrito no jobfile)",
-      "Report 2",
-      "Report Especial"
+      "Nome do Report 1",
+      "Nome do Report 2",
+      "Y+ maximo"
+    ]
+  },
+  "outro_exemplo": {
+    "host": "outro.servidor.com",
+    "user": "outro_usuario",
+    "password": null,
+    "base_dir": "/caminho/do/projeto/",
+    "simulation_folder": "ProjetoX",
+    "case_subfolder": null,
+    "logfile": "run.log",
+    "reports": [
+      "Convergencia"
     ]
   }
 }

@@ -2,21 +2,10 @@
 # SCRIPT DE MONITORAMENTO REMOTO PARA SIMULAÇÕES STAR-CCM+
 #
 # Ferramenta para monitorar uma simulação remotamente via SSH, gerando um
-# gráfico de status com resíduos, relatórios e imagens de cena.
+# painel de controle 2x2 com resíduos, relatórios e imagens de cena.
 #
-# Autor: Gemini (com base nas solicitações do usuário)
-# Versão: 1.2 (Portátil e com suporte a subpastas)
-#
-# Exemplo de Uso no Terminal:
-# ---------------------------
-# 1. Monitorar um caso com imagens em subpasta (ex: Grid0/05):
-#    >> python monitor.py Grid0 05 -o C:/Caminho/Para/Salvar
-#
-# 2. Monitorar um caso simples (sem subpastas de imagem):
-#    >> python monitor.py MinhaSimulacao
-#
-# 3. Ver todas as opções disponíveis:
-#    >> python monitor.py --help
+# Autor: Pedro Lopes (com assistência de IA)
+# Versão: 2.0 (Configuração via JSON)
 # ==============================================================================
 
 import re
@@ -26,10 +15,11 @@ import getpass
 import argparse
 import posixpath
 import paramiko
+import json
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import matplotlib.image as mpimg
-import json
+
 # ==============================================================================
 # FUNÇÃO DE PARSING DO ARQUIVO DE LOG
 # ==============================================================================
@@ -37,12 +27,12 @@ def parse_starccm_logfile(filepath, colunas_relatorios_especificadas):
     iterations, report_times, report_iterations = [], [], []
     residuals_data = {'Continuity': [], 'X-momentum': [], 'Y-momentum': [], 'Z-momentum': [], 'Tke': [], 'Sdr': [], 'Intermittency': []}
     reports_data = {key: [] for key in colunas_relatorios_especificadas}
-    
+
     residual_headers_map, report_headers_map = {}, {}
     current_time = 0.0
     header_line_found = False
     iteration_data_started = False
-    
+
     expected_residual_cols = list(residuals_data.keys())
     timestep_regex = re.compile(r"TimeStep\s+\d+:\s+Time\s+([\d.eE+-]+)")
 
@@ -54,9 +44,9 @@ def parse_starccm_logfile(filepath, colunas_relatorios_especificadas):
                 match_time = timestep_regex.match(line)
                 if match_time:
                     current_time = float(match_time.group(1))
-                    iteration_data_started = True 
+                    iteration_data_started = True
                     continue
-                
+
                 if line.startswith("Iteration") and "Continuity" in line and (not colunas_relatorios_especificadas or any(report_col in line for report_col in colunas_relatorios_especificadas)):
                     header_line_found = True
                     full_headers_list_parsed = [h.strip() for h in re.split(r'\s{2,}', line) if h.strip()]
@@ -67,20 +57,20 @@ def parse_starccm_logfile(filepath, colunas_relatorios_especificadas):
                     if temp_residual_map: residual_headers_map = temp_residual_map
                     if temp_report_map: report_headers_map = temp_report_map
                     continue
-                
+
                 if header_line_found and iteration_data_started and (line.startswith(' ') or (line and line[0].isdigit())):
                     values_str = re.split(r'\s+', line.strip())
                     try:
                         if not values_str or not values_str[0].isdigit(): continue
                         iter_num = int(values_str[0])
                         iterations.append(iter_num)
-                        
+
                         for res_name, col_idx in residual_headers_map.items():
                             residuals_data[res_name].append(float(values_str[col_idx]) if col_idx < len(values_str) else float('nan'))
-                        
+
                         first_report_col_name = colunas_relatorios_especificadas[0] if colunas_relatorios_especificadas else None
                         first_report_col_idx = report_headers_map.get(first_report_col_name) if first_report_col_name else None
-                        
+
                         if first_report_col_idx is not None and first_report_col_idx < len(values_str) and values_str[first_report_col_idx] not in ['---', '']:
                             report_times.append(current_time)
                             report_iterations.append(iter_num)
@@ -103,7 +93,7 @@ def parse_starccm_logfile(filepath, colunas_relatorios_especificadas):
         for res_name in residuals_data:
             while len(residuals_data[res_name]) < max_len: residuals_data[res_name].append(float('nan'))
             residuals_data[res_name] = residuals_data[res_name][:max_len]
-            
+
     return iterations, residuals_data, report_iterations, report_times, reports_data
 
 # ==============================================================================
@@ -123,15 +113,12 @@ def find_latest_image_in_remote_folder(sftp_client, remote_folder_path):
         return None
 
 # ==============================================================================
-# FUNÇÃO DE PLOTAGEM (VERSÃO COM TEXTO DE STATUS)
+# FUNÇÃO DE PLOTAGEM
 # ==============================================================================
-# ==============================================================================
-# FUNÇÃO DE PLOTAGEM (VERSÃO COM TEXTO DE STATUS E EIXO Y FIXO)
-# ==============================================================================
-def plot_data(iterations, residuals_data, report_iterations, report_times, reports_data, 
-              colunas_reports_para_plotar, sftp_client_obj, base_remote_dir, 
+def plot_data(iterations, residuals_data, report_iterations, report_times, reports_data,
+              colunas_reports_para_plotar, sftp_client_obj, base_remote_dir,
               output_filename=None, show_plot_interactively=True):
-    
+
     output_dir = os.path.dirname(output_filename) if output_filename else "."
     os.makedirs(output_dir, exist_ok=True)
 
@@ -139,8 +126,8 @@ def plot_data(iterations, residuals_data, report_iterations, report_times, repor
         print("Nenhum dado válido para plotar.")
         return None
 
-    fig, axs = plt.subplots(2, 2, figsize=(18, 10)) 
-    
+    fig, axs = plt.subplots(2, 2, figsize=(18, 10))
+
     # --- Plotagem dos Resíduos (axs[0, 0]) ---
     ax_residuals = axs[0, 0]
     ax_residuals.set_title('Resíduos vs. Iteração')
@@ -149,7 +136,7 @@ def plot_data(iterations, residuals_data, report_iterations, report_times, repor
              ax_residuals.plot(iterations, values, label=key, alpha=0.8)
     ax_residuals.set_xlabel('Número da Iteração'); ax_residuals.set_ylabel('Resíduo')
     ax_residuals.set_yscale('log'); ax_residuals.grid(True, which="both", ls="--")
-    
+
     if iterations:
         start_iter = iterations[max(0, len(iterations) - 50)]
         end_iter = iterations[-1]
@@ -169,11 +156,11 @@ def plot_data(iterations, residuals_data, report_iterations, report_times, repor
         if key in reports_data and any(v==v for v in reports_data[key]):
             ax_reports.plot(report_times, reports_data[key], label=key, marker='.', linestyle='-')
             has_line_data = True
-            
+
     if has_line_data:
         ax_reports.set_xlabel('Tempo Físico (s)'); ax_reports.set_ylabel('Valores dos Relatórios')
         ax_reports.grid(True, which="both", ls="--")
-        ax_reports.set_ylim(-100, 100) # <<< LINHA REINSERIDA AQUI
+        ax_reports.set_ylim(-100, 100)
         ax_reports.legend(loc='best', fontsize='small')
     else:
         ax_reports.text(0.5, 0.5, "Sem dados de relatórios para plotar.", ha='center', va='center', transform=ax_reports.transAxes)
@@ -183,7 +170,7 @@ def plot_data(iterations, residuals_data, report_iterations, report_times, repor
         if key in reports_data and reports_data[key]:
             last_value = reports_data[key][-1]
             text_label = f"Último {key}: {last_value:.2f}"
-            
+
             ax_reports.text(0.95, y_pos, text_label,
                             transform=ax_reports.transAxes,
                             fontsize=12,
@@ -225,22 +212,22 @@ def plot_data(iterations, residuals_data, report_iterations, report_times, repor
             print(f"Erro ao salvar o gráfico: {e}")
     if show_plot_interactively: plt.show()
     plt.close(fig)
+
 # ==============================================================================
-# FUNÇÃO PRINCIPAL DE MONITORAMENTO (O "MOTOR")
+# FUNÇÃO PRINCIPAL DE MONITORAMENTO
 # ==============================================================================
-def monitor_simulation( 
-        hostname, username, remote_log_path, case_subfolder, reports_to_plot, 
+def monitor_simulation(
+        hostname, username, password, remote_log_path, case_subfolder, reports_to_plot,
         output_filename, interval_seconds, use_key_auth, ssh_key_path,
-        port_ssh=22, password=None, ssh_key_passphrase=None 
+        port_ssh=22, ssh_key_passphrase=None
     ):
-    
+
     output_dir = os.path.dirname(output_filename)
     local_temp_log_path = os.path.join(output_dir, "temp_downloaded_logfile.log")
 
     base_remote_dir_log = posixpath.dirname(remote_log_path)
     base_remote_dir_images = posixpath.join(base_remote_dir_log, case_subfolder) if case_subfolder else base_remote_dir_log
 
-    print("Iniciando monitoramento.")
     print(f"Pasta de LOGS remota: {base_remote_dir_log}")
     print(f"Pasta de IMAGENS remota: {base_remote_dir_images}")
 
@@ -251,23 +238,22 @@ def monitor_simulation(
             ssh_client = paramiko.SSHClient()
             ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             print(f"Conectando a {hostname}:{port_ssh} como {username}...")
-            
+
             if use_key_auth:
-                ssh_client.connect(hostname, port=port_ssh, username=username, 
+                ssh_client.connect(hostname, port=port_ssh, username=username,
                                    key_filename=os.path.expanduser(ssh_key_path),
                                    passphrase=ssh_key_passphrase, timeout=20)
             else:
-                if not password: password = getpass.getpass(f"Senha para {username}@{hostname}: ")
                 ssh_client.connect(hostname, port=port_ssh, username=username, password=password, timeout=20)
-            
+
             print("Conexão SSH bem-sucedida.")
             sftp_client = ssh_client.open_sftp()
-            
+
             print(f"Baixando log '{remote_log_path}' para '{local_temp_log_path}'...")
             sftp_client.get(remote_log_path, local_temp_log_path)
-            
+
             iterations, residuals, report_iters, report_times, reports = parse_starccm_logfile(local_temp_log_path, reports_to_plot)
-            
+
             if not iterations:
                 print("Nenhum dado de iteração encontrado no log. Verificando novamente...")
             else:
@@ -282,28 +268,28 @@ def monitor_simulation(
         finally:
             if sftp_client: sftp_client.close()
             if ssh_client: ssh_client.close()
-        
+
         print(f"Aguardando {interval_seconds} segundos para a próxima atualização...")
         time.sleep(interval_seconds)
 
 # ==============================================================================
-# PONTO DE ENTRADA DO SCRIPT (LENDO TODAS AS CONFIGURAÇÕES DO JSON)
+# PONTO DE ENTRADA DO SCRIPT
 # ==============================================================================
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Monitora uma simulação STAR-CCM+ remota usando um arquivo de configuração.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    
+
     # Argumentos principais
     parser.add_argument("case_name", help="Nome do caso a ser executado, conforme definido no arquivo de configuração.")
     parser.add_argument("-o", "--output-dir", default=".", help="Diretório onde o gráfico e arquivos temporários serão salvos.")
     parser.add_argument("--config", default="config.json", help="Caminho para o arquivo de configuração JSON.")
-    
-    # Argumentos que podem sobrescrever o padrão, mas não contêm dados sensíveis
-    parser.add_argument("--host", default="10.1.1.218", help="Hostname ou IP do servidor SSH.")
+
+    # Argumentos que podem sobrescrever valores do config
+    parser.add_argument("--host", help="Hostname ou IP do servidor SSH (sobrescreve o valor do config).")
     parser.add_argument("-i", "--interval", type=int, default=30, help="Intervalo de atualização em segundos.")
-    
+
     args = parser.parse_args()
 
     # --- Leitura e Validação do Arquivo de Configuração ---
@@ -322,8 +308,9 @@ if __name__ == "__main__":
         print(f"Erro: Caso '{args.case_name}' não encontrado em '{args.config}'.")
         print(f"Casos disponíveis: {', '.join(all_configs.keys())}")
         exit(1)
-    
+
     # Extrai as configurações do arquivo.
+    host_from_config = case_config.get("host")
     user = case_config.get("user")
     password = case_config.get("password")
     base_dir = case_config.get("base_dir")
@@ -333,11 +320,14 @@ if __name__ == "__main__":
     reports_to_plot = case_config.get("reports", [])
 
     # Validação dos campos obrigatórios do config
-    required_keys = ["user", "password", "base_dir", "simulation_folder", "logfile"]
+    required_keys = ["host", "user", "password", "base_dir", "simulation_folder", "logfile"]
     if not all(key in case_config for key in required_keys):
         missing_keys = [key for key in required_keys if key not in case_config]
         print(f"Erro: A configuração para '{args.case_name}' está incompleta. Faltando as chaves: {', '.join(missing_keys)}")
         exit(1)
+
+    # Lógica de sobrescrita: usa o host do terminal se fornecido, senão, usa o do config.
+    final_host = args.host if args.host else host_from_config
 
     # --- Montagem final e execução ---
     remote_log_full_path = posixpath.join(base_dir, simulation_folder, logfile)
@@ -345,15 +335,14 @@ if __name__ == "__main__":
     output_image_base_name = f"status_{simulation_folder}_{args.case_name}.png"
     output_image_full_path = os.path.join(args.output_dir, output_image_base_name)
 
-    # A autenticação por chave será usada se a senha no config for nula ou vazia
     use_ssh_key = not password
 
-    print(f"Iniciando monitoramento para o caso: '{args.case_name}'")
+    print(f"Iniciando monitoramento para o caso: '{args.case_name}' no host: {final_host}")
     print(f"Pressione Ctrl+C para interromper. Saída será salva em: {os.path.abspath(args.output_dir)}")
-    
+
     try:
         monitor_simulation(
-            hostname=args.host,
+            hostname=final_host,
             username=user,
             password=password,
             remote_log_path=remote_log_full_path,
